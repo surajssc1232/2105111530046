@@ -1,6 +1,8 @@
 package com.example.demo.Service;
 
 import java.util.*;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.*;
 import org.springframework.web.client.*;
@@ -11,7 +13,40 @@ public class NumberService {
     private final LinkedList<Integer> window;
     private List<Integer> prevWindowState;
     private static final int WINDOW_SIZE = 10;
-    
+
+
+    @Value("${auth.url}")
+    private String authUrl;
+
+    @Value("${numbers.primes.url}")
+    private String primesUrl;
+
+    @Value("${numbers.fibo.url}")
+    private String fiboUrl;
+
+    @Value("${numbers.even.url}")
+    private String evenUrl;
+
+    @Value("${numbers.rand.url}")
+    private String randUrl;
+
+    @Value("${companyName}")
+    private String companyName;
+
+    @Value("${clientID}")
+    private String clientID;
+
+    @Value("${clientSecret}")
+    private String clientSecret;
+
+    @Value("${ownerName}")
+    private String ownerName;
+
+    @Value("${ownerEmail}")
+    private String ownerEmail;
+
+    @Value("${rollNo}")
+    private String rollNo;
 
     public NumberService() {
         restTemplate = new RestTemplate();
@@ -19,27 +54,54 @@ public class NumberService {
         prevWindowState = new ArrayList<>();
     }
 
-    public List<Integer> fetchNumbers(String type) {
-        String url = "";
-        if (type.equals("p")) {
-            url = "http://20.244.56.144/test/primes";
-        } else if (type.equals("f")) {
-            url = "http://20.244.56.144/test/fibo";
-        } else if (type.equals("e")) {
-            url = "http://20.244.56.144/test/even";
-        } else if (type.equals("r")) {
-            url = "http://20.244.56.144/test/rand";
-        } else {
-            throw new IllegalArgumentException("Invalid type: " + type);
-        }
+    private String obtainAuthToken() {
         HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJNYXBDbGFpbXMiOnsiZXhwIjoxNzI0ODI3NDE3LCJpYXQiOjE3MjQ4MjcxMTcsImlzcyI6IkFmZm9yZG1lZCIsImp0aSI6IjA0ODQzNzJhLWNmYzUtNDA5MC04MDEwLWUwNjZlNDY0MjMwZiIsInN1YiI6InNzLmNoYXVoYW4yMDIxQGdsYmFqYWpncm91cC5vcmcifSwiY29tcGFueU5hbWUiOiJhZmZvcmRtZWQiLCJjbGllbnRJRCI6IjA0ODQzNzJhLWNmYzUtNDA5MC04MDEwLWUwNjZlNDY0MjMwZiIsImNsaWVudFNlY3JldCI6InJZVEtWWmNJdmN2eHlBaXkiLCJvd25lck5hbWUiOiJzdXJhaiBzaW5naCBjaGF1aGFuIiwib3duZXJFbWFpbCI6InNzLmNoYXVoYW4yMDIxQGdsYmFqYWpncm91cC5vcmciLCJyb2xsTm8iOiIyMTA1MTExNTMwMDQ2In0.jCCSr78fwLSvgWGfETolSlSQiJxYVxwpDHSlxgOG6VU");
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        Map<String, String> authRequest = new HashMap<>();
+        authRequest.put("companyName", companyName);
+        authRequest.put("clientID", clientID);
+        authRequest.put("clientSecret", clientSecret);
+        authRequest.put("ownerName", ownerName);
+        authRequest.put("ownerEmail", ownerEmail);
+        authRequest.put("rollNo", rollNo);
+
+        HttpEntity<Map<String, String>> entity = new HttpEntity<>(authRequest, headers);
+        ResponseEntity<Map> response = restTemplate.postForEntity(authUrl, entity, Map.class);
+        return (String) response.getBody().get("access_token");
+    }
+
+    private List<Integer> fetchNumbers(String type) {
+        String url = getUrlForType(type);
+        String token = obtainAuthToken();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
 
         HttpEntity<String> entity = new HttpEntity<>(headers);
-
         ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
-    
+
+        if (response.getStatusCode() == HttpStatus.UNAUTHORIZED) {
+            token = obtainAuthToken();
+            headers.setBearerAuth(token);
+            entity = new HttpEntity<>(headers);
+            response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
+        }
+
         return (List<Integer>) response.getBody().get("numbers");
+    }
+
+    private String getUrlForType(String type) {
+        switch (type) {
+            case "p":
+                return primesUrl;
+            case "f":
+                return fiboUrl;
+            case "e":
+                return evenUrl;
+            case "r":
+                return randUrl;
+            default:
+                throw new IllegalArgumentException("Invalid type: " + type);
+        }
     }
 
     public Map<String, Object> processNumbers(String type) {
@@ -59,7 +121,7 @@ public class NumberService {
 
     private void addToWindow(int num) {
         if (window.contains(num)) {
-            return; 
+            return; // Avoid duplicates
         }
 
         if (window.size() >= WINDOW_SIZE) {
