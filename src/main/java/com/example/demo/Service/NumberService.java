@@ -121,7 +121,7 @@ public class NumberService {
 
     private void addToWindow(int num) {
         if (window.contains(num)) {
-            return; // Avoid duplicates
+            return;
         }
 
         if (window.size() >= WINDOW_SIZE) {
